@@ -16,8 +16,8 @@ public sealed class GoogleTextToSpeechSynthesizer(HttpClient httpClient) : ISpee
 
         var body = await response.Content.ReadFromJsonAsync<SynthesizeResponse>(cancellationToken);
 
-        return Convert.FromBase64String(body.AudioContent); 
+        return Convert.FromBase64String(body.AudioContent);
     }
-    
+
     private sealed record SynthesizeResponse(string AudioContent);
 }

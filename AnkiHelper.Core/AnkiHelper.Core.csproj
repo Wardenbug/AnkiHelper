@@ -14,4 +14,7 @@
       <PackageReference Include="OllamaSharp" Version="5.4.30" />
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="Generation\Prompts\*.md" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>
