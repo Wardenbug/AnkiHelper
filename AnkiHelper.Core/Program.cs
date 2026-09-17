@@ -2,7 +2,9 @@
 using System.Text;
 using System.Text.Json;
 using AnkiHelper.Core.Abstractions;
+using AnkiHelper.Core.Anki;
 using AnkiHelper.Core.Generation;
+using AnkiHelper.Core.Speech;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +17,17 @@ builder.Services.AddChatClient(
         new Uri("http://localhost:11434"),
         "gemma4"));
 
+builder.Services.AddHttpClient<ISpeechSynthesizer, GoogleTextToSpeechSynthesizer>(client =>
+{
+    client.BaseAddress = new Uri("https://texttospeech.googleapis.com");
+    client.DefaultRequestHeaders.Add("X-Goog-Api-Key", "");
+});
+
+builder.Services.AddHttpClient<IAnkiClient, AnkiConnectClient>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:8765");
+});
+
 builder.Services.AddScoped<IContentGenerator, ContentGenerator>();
 
 using var app = builder.Build();
@@ -22,109 +35,22 @@ using var app = builder.Build();
 var chatClient = app.Services.GetRequiredService<IChatClient>();
 
 var contentGenerator = app.Services.GetRequiredService<IContentGenerator>();
+var textToSpeechSynthesizer = app.Services.GetRequiredService<ISpeechSynthesizer>();
+var ankiClient = app.Services.GetRequiredService<IAnkiClient>();
 
-await contentGenerator.GenerateContent("Hello");
+var content = await contentGenerator.GenerateContent("hubris", "English", "Russian");
 
-// await foreach (var stream in chatClient.GetStreamingResponseAsync("Что такое C#?"))
-//     Console.Write(stream.Text);
+var tts = await textToSpeechSynthesizer.SynthesizeAsync(content.Items[0].Senses[0].ExampleTranslateLang, "ru-RU");
 
-// const string token = "";
-// var httpClient = new HttpClient();
-//
-// httpClient.BaseAddress = new Uri("https://texttospeech.googleapis.com");
-// httpClient.DefaultRequestHeaders.Add("X-Goog-Api-Key", token);
-//
-// using StringContent jsonContent1 = new(
-//     JsonSerializer.Serialize(new
-//     {
-//         input = new
-//         {
-//             text = "Hello world"
-//         },
-//         voice = new
-//         {
-//             languageCode = "en-US"
-//         },
-//         audioConfig = new
-//         {
-//             audioEncoding = "MP3"
-//         }
-//     }),
-//     Encoding.UTF8,
-//     "application/json");
-//
-// using var result1 = await httpClient.PostAsync("v1/text:synthesize", jsonContent1);
-//
-// result1.EnsureSuccessStatusCode();
-//
-// var json = await result1.Content.ReadAsStringAsync();
-// using var doc = JsonDocument.Parse(json);
-// var base64Audio = doc.RootElement.GetProperty("audioContent").GetString();
-//
-// // var audioBytes = Convert.FromBase64String(base64Audio);
-// // await File.WriteAllBytesAsync("output.mp3", audioBytes);
-//
-// var httpClient1 = new HttpClient();
-//
-// httpClient1.BaseAddress = new Uri("http://localhost:8765");
-//
-// using StringContent jsonContent = new(
-//     JsonSerializer.Serialize(new
-//     {
-//         action = "addNote",
-//         version = 6,
-//         @params = new
-//         {
-//             note = new
-//             {
-//                 deckName = "Test",
-//                 modelName = "Basic (and reversed card)",
-//                 fields = new
-//                 {
-//                     Front = "Fronte Content",
-//                     Back = "Back Content",
-//                 },
-//                 options = new
-//                 {
-//                     allowDublicate = false,
-//                     duplicateScope = "deck",
-//                     duplicateScopeOptions = new
-//                     {
-//                         deckName = "Test",
-//                         checkChildren = false,
-//                         checkAllModels = false
-//                     }
-//                 },
-//                 audio = new[]
-//                 {
-//                     new
-//                     {
-//                         filename = "test.mp3",
-//                         data = base64Audio,
-//                         fields = new []
-//                         {
-//                             "Front"
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }),
-//     Encoding.UTF8,
-//     "application/json");
-//
-// // using StringContent jsonContent = new(
-// //     JsonSerializer.Serialize(new
-// //     {
-// //         action = "modelNames",
-// //         version = 6,
-// //     }),
-// //     Encoding.UTF8,
-// //     "application/json");
-//
-// using var result = await httpClient1.PostAsync("", jsonContent);
-//
-// var json1 = await result.Content.ReadAsStringAsync();
-//
-// Console.WriteLine(json1);
 
+var result = await ankiClient.AddNoteAsync(new AnkiNote(
+    "Test",
+    "Basic (and reversed card)",
+    new Dictionary<string, string>
+    {
+        ["Front"] = content.Items[0].Senses[0].ExampleTranslateLang,
+        ["Back"] = content.Items[0].Senses[0].ExampleOriginalLang
+    },
+    new AnkiNoteOptions(false, "deck", new AnkiDuplicateScopeOptions("Test")),
+    new AnkiAudio[] { new AnkiAudio("Test", tts, new[] { "Front" }) }
+), CancellationToken.None);

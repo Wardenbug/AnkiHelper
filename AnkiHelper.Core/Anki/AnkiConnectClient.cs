@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using AnkiHelper.Core.Abstractions;
 
@@ -10,7 +10,7 @@ public sealed class AnkiConnectClient(HttpClient httpClient) : IAnkiClient
 
     public async Task<long> AddNoteAsync(AnkiNote note, CancellationToken cancellationToken)
     {
-        var result = await httpClient.PostAsJsonAsync("", new
+        var json = JsonSerializer.Serialize(new
         {
             action = "addNote",
             version = 6,
@@ -18,8 +18,21 @@ public sealed class AnkiConnectClient(HttpClient httpClient) : IAnkiClient
             {
                 note
             }
-        }, cancellationToken);
+        }, JsonOptions);
+        
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await httpClient.PostAsync("", content, cancellationToken);
 
-        return 1;
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+        var result = JsonSerializer.Deserialize<AnkiConnectResponse>(raw, JsonOptions);
+
+        if (result.Error is not null)
+        {
+            throw new InvalidOperationException(result.Error);
+        }
+
+        return result.Result;
     }
+
+    private sealed record AnkiConnectResponse(long Result, string? Error);
 }
