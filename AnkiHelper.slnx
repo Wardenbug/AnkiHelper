@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="AnkiHelper.Core/AnkiHelper.Core.csproj" />
+  <Project Path="AnkiHelper.Telegram/AnkiHelper.Telegram.csproj" />
 </Solution>

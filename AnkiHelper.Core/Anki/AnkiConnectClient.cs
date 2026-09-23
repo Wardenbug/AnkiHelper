@@ -8,18 +8,17 @@ public sealed class AnkiConnectClient(HttpClient httpClient) : IAnkiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<long> AddNoteAsync(AnkiNote note, CancellationToken cancellationToken)
+    public Task<long?> AddNoteAsync(AnkiNote note, CancellationToken cancellationToken) =>
+        SendAsync(new { action = "addNote", version = 6, @params = new { note } }, cancellationToken);
+
+    public Task<long?> SyncAsync(CancellationToken cancellationToken = default) =>
+        SendAsync(new { action = "sync", version = 6 }, cancellationToken);
+    
+    
+
+    private async Task<long?> SendAsync(object request, CancellationToken cancellationToken)
     {
-        var json = JsonSerializer.Serialize(new
-        {
-            action = "addNote",
-            version = 6,
-            @params = new
-            {
-                note
-            }
-        }, JsonOptions);
-        
+        var json = JsonSerializer.Serialize(request, JsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = await httpClient.PostAsync("", content, cancellationToken);
 
@@ -33,6 +32,4 @@ public sealed class AnkiConnectClient(HttpClient httpClient) : IAnkiClient
 
         return result.Result;
     }
-
-    private sealed record AnkiConnectResponse(long Result, string? Error);
 }
